@@ -9,6 +9,7 @@ node_modules/
 CLAUDE.md
 HANDOFF.html
 test-*.mjs
+.mcp.json
 
 # OS
 Thumbs.db
