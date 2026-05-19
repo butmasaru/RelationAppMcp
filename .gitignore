@@ -7,6 +7,8 @@ node_modules/
 # Claude local config (memory, settings, local skills)
 .claude/
 CLAUDE.md
+HANDOFF.html
+test-*.mjs
 
 # OS
 Thumbs.db
