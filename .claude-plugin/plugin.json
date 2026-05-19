@@ -1,0 +1,10 @@
+{
+  "name": "relation-mcp",
+  "description": "Re:lation API v2 MCP Server - AI tools from Claude Code / Codex / Gemini to operate Re:lation CRM",
+  "version": "1.0.0",
+  "author": {
+    "name": "RelationAppMCP Contributors"
+  },
+  "homepage": "https://github.com/butmasaru/RelationAppMcp",
+  "repository": "https://github.com/butmasaru/RelationAppMcp"
+}
