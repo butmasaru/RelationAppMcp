@@ -3,6 +3,8 @@
 Re:lation API v2 の全エンドポイントを網羅する MCP (Model Context Protocol) サーバー。
 Claude Code / Codex / Gemini 等の AI ツールから Re:lation を統一的に操作できます。
 
+> **Re:lation API v2 公式ドキュメント**: https://developer.ingage.jp/
+
 ## 特徴
 
 - **35 ツール** — 顧客管理、チケット検索、メール送受信、チャット履歴、ラベル・分類管理など
@@ -121,6 +123,17 @@ MASTER    → readOnlyHint: false, destructiveHint: true,  openWorldHint: false
 - @modelcontextprotocol/sdk ^1.12.0
 - Node.js v22+
 
+## 免責事項
+
+本ソフトウェアは **非公式** の MCP サーバー実装であり、株式会社インゲージおよび Re:lation とは一切関係ありません。
+
+- Re:lation API の利用にあたっては、[Re:lation API v2 公式ドキュメント](https://developer.ingage.jp/) および各自のサービス利用規約を遵守してください
+- 本ソフトウェアの使用により生じたいかなる損害についても、作者は一切の責任を負いません
+- メール送信・コンタクト削除等の破壊的操作は **取り消しできません**。`RELATION_ENABLE_DANGEROUS` の有効化は自己責任で行ってください
+- API トークンの管理は利用者の責任です。リポジトリへのコミットや公開場所への配置は避けてください
+
+**USE AT YOUR OWN RISK.**
+
 ## ライセンス
 
-Private
+[Apache License 2.0](LICENSE)
