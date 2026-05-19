@@ -4,10 +4,8 @@ node_modules/
 .env
 .env.*
 
-# Claude memory (local state, not for sharing)
-.claude/memory/memory.db
-.claude/memory/memory.db-*
-.claude/memory/daily/
+# Claude local config (memory, settings, local skills)
+.claude/
 
 # OS
 Thumbs.db
