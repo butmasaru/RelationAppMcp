@@ -1,0 +1,14 @@
+{
+  "name": "relation-tools",
+  "owner": {
+    "name": "RelationAppMCP Contributors"
+  },
+  "plugins": [
+    {
+      "name": "relation-mcp",
+      "source": ".",
+      "description": "Re:lation API v2 MCP Server - CRM operations from AI tools",
+      "version": "1.0.0"
+    }
+  ]
+}
