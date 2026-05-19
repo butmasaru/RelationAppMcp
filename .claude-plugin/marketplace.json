@@ -5,7 +5,7 @@
   },
   "plugins": [
     {
-      "name": "relation-mcp",
+      "name": "relation",
       "source": {
         "source": "github",
         "repo": "butmasaru/RelationAppMcp"
