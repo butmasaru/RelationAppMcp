@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RelationApp MCP Server - 設計引き継ぎドキュメント</title>
+<style>
+  :root { --bg: #1a1a2e; --surface: #16213e; --card: #0f3460; --accent: #e94560; --text: #eee; --muted: #999; --green: #4ecca3; --yellow: #f0c040; --orange: #e07020; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', 'Meiryo', sans-serif; background: var(--bg); color: var(--text); line-height: 1.7; padding: 2rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 2rem; border-bottom: 3px solid var(--accent); padding-bottom: 0.5rem; margin-bottom: 1.5rem; }
+  h2 { font-size: 1.4rem; color: var(--green); margin: 2rem 0 1rem; border-left: 4px solid var(--green); padding-left: 0.8rem; }
+  h3 { font-size: 1.1rem; color: var(--yellow); margin: 1.2rem 0 0.5rem; }
+  p, li { margin-bottom: 0.5rem; }
+  ul, ol { padding-left: 1.5rem; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
+  th, td { padding: 0.5rem 0.8rem; border: 1px solid #333; text-align: left; }
+  th { background: var(--card); color: var(--green); }
+  tr:nth-child(even) { background: rgba(255,255,255,0.03); }
+  code { background: var(--card); padding: 0.15rem 0.4rem; border-radius: 3px; font-size: 0.9em; }
+  pre { background: var(--surface); padding: 1rem; border-radius: 6px; overflow-x: auto; margin: 1rem 0; font-size: 0.85rem; border-left: 3px solid var(--accent); }
+  .badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 3px; font-size: 0.75rem; font-weight: bold; }
+  .read { background: #1b5e20; color: #a5d6a7; }
+  .write { background: #b71c1c; color: #ef9a9a; }
+  .master { background: #4a148c; color: #ce93d8; }
+  .section-meta { background: var(--surface); padding: 1rem 1.5rem; border-radius: 8px; margin: 1rem 0; }
+  .decision { background: rgba(233,69,96,0.1); border: 1px solid var(--accent); padding: 1rem 1.5rem; border-radius: 8px; margin: 1rem 0; }
+  .decision strong { color: var(--accent); }
+  .toc { background: var(--surface); padding: 1.5rem; border-radius: 8px; margin-bottom: 2rem; }
+  .toc a { color: var(--green); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .endpoint-row td:first-child { white-space: nowrap; }
+  .method { font-weight: bold; font-size: 0.8rem; padding: 0.1rem 0.4rem; border-radius: 3px; }
+  .get { background: #1565c0; color: white; }
+  .post { background: #2e7d32; color: white; }
+  .put { background: #e65100; color: white; }
+  .delete { background: #b71c1c; color: white; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>RelationApp MCP Server - 設計引き継ぎドキュメント</h1>
+
+<div class="section-meta">
+  <strong>作成日</strong>: 2026-05-19<br>
+  <strong>作業ディレクトリ</strong>: <code>C:\repos\RelationAppMCP</code><br>
+  <strong>目的</strong>: Re:lation API の全エンドポイントを網羅した MCP サーバーを新規構築する<br>
+  <strong>API公式ドキュメント</strong>: <code>https://developer.ingage.jp/</code><br>
+  <strong>参考実装</strong>: <code>https://github.com/Procrustes5/relation-mcp-server</code>（個人開発、APIの3〜4割のみカバー）
+</div>
+
+<nav class="toc">
+  <strong>目次</strong>
+  <ol>
+    <li><a href="#decisions">意思決定ログ</a></li>
+    <li><a href="#api-overview">API概要・認証</a></li>
+    <li><a href="#endpoints">全エンドポイント一覧</a></li>
+    <li><a href="#safety">安全性設計（ツール公開方針）</a></li>
+    <li><a href="#existing-mcp">既存MCPサーバーとの差分</a></li>
+    <li><a href="#derivatives">派生プロダクト（C#ライブラリ / CLI）</a></li>
+    <li><a href="#sources">ソース資料の所在</a></li>
+  </ol>
+</nav>
+
+<!-- ====================================== -->
+<h2 id="decisions">1. 意思決定ログ</h2>
+
+<div class="decision">
+  <strong>MCP vs CLI → MCP を選択</strong>
+  <ul>
+    <li>CLI + Skill + hooks 案も検討したが、以下の理由で MCP に決定：</li>
+    <li><strong>マルチAI対応</strong>: Claude Code だけでなく Codex / Gemini でも使いたい。MCP ならプロトコル層で安全性が担保され、AI ごとに防御を書き直す必要がない</li>
+    <li><strong>業界標準</strong>: Claude / GPT / Gemini が MCP 対応に向かっている。エコシステムに乗る</li>
+    <li><strong>型安全</strong>: JSON Schema でパラメータを強制。存在しないツールは呼べない</li>
+  </ul>
+</div>
+
+<div class="decision">
+  <strong>フォーク vs 新規構築 → 新規構築</strong>
+  <ul>
+    <li>既存 <code>relation-mcp-server</code>（Procrustes5）は個人開発でAPIカバー率が低い（3〜4割）</li>
+    <li>API自体がシンプルなREST（Bearer Token + JSON）なので新規構築のコストは低い</li>
+    <li>既存実装は参考にするが、コードベースは独立させる</li>
+    <li>将来的に C# ライブラリや CLI にも展開するため、API クライアント層を再利用可能な設計にする</li>
+  </ul>
+</div>
+
+<div class="decision">
+  <strong>派生プロダクトの展望</strong>
+  <ul>
+    <li>MCP サーバー（TypeScript）→ まずこれを作る</li>
+    <li>C# ライブラリ → MCP の API クライアント設計を参考に .NET 版を作成</li>
+    <li>CLI ツール → C# ライブラリを使って CLI 化（人間が直接叩く用途）</li>
+    <li>いずれも API 仕様は同一なので、MCP でエンドポイントを網羅しておけば他への展開はスムーズ</li>
+  </ul>
+</div>
+
+<!-- ====================================== -->
+<h2 id="api-overview">2. API概要・認証</h2>
+
+<h3>基本情報</h3>
+<table>
+  <tr><th>項目</th><th>内容</th></tr>
+  <tr><td>提供元</td><td>株式会社インゲージ</td></tr>
+  <tr><td>ベースURL</td><td><code>https://&lt;subdomain&gt;.relationapp.jp/api/v2/</code></td></tr>
+  <tr><td>認証</td><td>Bearer Token（<code>Authorization: Bearer &lt;ACCESS_TOKEN&gt;</code>）</td></tr>
+  <tr><td>データ形式</td><td>JSON（Content-Type: application/json）</td></tr>
+  <tr><td>文字コード</td><td>UTF-8</td></tr>
+  <tr><td>レートリミット</td><td>60リクエスト/分（超過で HTTP 403）</td></tr>
+</table>
+
+<h3>レートリミット制御ヘッダ</h3>
+<table>
+  <tr><th>ヘッダ</th><th>内容</th></tr>
+  <tr><td><code>X-RateLimit-Limit</code></td><td>60（1分あたり最大）</td></tr>
+  <tr><td><code>X-RateLimit-Remaining</code></td><td>残り回数</td></tr>
+  <tr><td><code>X-RateLimit-Reset</code></td><td>リセット時刻（Unixtime）</td></tr>
+</table>
+
+<h3>エラーコード</h3>
+<table>
+  <tr><th>HTTP</th><th>意味</th></tr>
+  <tr><td>400</td><td>パラメータ誤り</td></tr>
+  <tr><td>401</td><td>トークン不正・未設定</td></tr>
+  <tr><td>403</td><td>レートリミット超過</td></tr>
+  <tr><td>404</td><td>リソース/エンドポイント不在</td></tr>
+  <tr><td>415</td><td>Content-Type 未指定</td></tr>
+  <tr><td>500</td><td>サーバーエラー</td></tr>
+  <tr><td>503</td><td>メンテナンス中</td></tr>
+</table>
+
+<h3>MCP サーバー設定（環境変数）</h3>
+<table>
+  <tr><th>変数名</th><th>内容</th></tr>
+  <tr><td><code>RELATION_API_TOKEN</code></td><td>Re:lation アクセストークン（管理画面 → システム設定 → APIトークン）</td></tr>
+  <tr><td><code>RELATION_SUBDOMAIN</code></td><td>テナントのサブドメイン</td></tr>
+</table>
+
+<!-- ====================================== -->
+<h2 id="endpoints">3. 全エンドポイント一覧</h2>
+
+<p>Re:lation API v2 の全エンドポイントを網羅。<span class="badge read">READ</span> = 読み取り、<span class="badge write">WRITE</span> = 書き込み、<span class="badge master">MASTER</span> = マスタ管理。</p>
+
+<h3>3-1. コンタクト（customer）</h3>
+<p>URI前半: <code>/api/v2/customer_groups/:customer_group_id/customers/</code></p>
+<table class="endpoint-row">
+  <tr><th>操作</th><th>メソッド</th><th>パス末尾</th><th>分類</th><th>備考</th></tr>
+  <tr><td>検索</td><td><span class="method get">GET</span></td><td><code>search</code></td><td><span class="badge read">READ</span></td><td>customer_ids[], emails[], tels[], system_id1s[], gender_cds[], badge_ids[], default_assignees[] で絞り込み。per_page最大50</td></tr>
+  <tr><td>登録</td><td><span class="method post">POST</span></td><td><code>create</code></td><td><span class="badge write">WRITE</span></td><td>last_name必須。emails最大6, tels最大3。system_id1重複で400。custom_item1〜10対応</td></tr>
+  <tr><td>更新（system_id1キー）</td><td><span class="method put">PUT</span></td><td><code>system_id1/:id</code></td><td><span class="badge write">WRITE</span></td><td>外部システムIDキーで更新</td></tr>
+  <tr><td>更新（emailキー）</td><td><span class="method put">PUT</span></td><td><code>email/:email</code></td><td><span class="badge write">WRITE</span></td><td>メールアドレスキーで更新</td></tr>
+  <tr><td>取得（system_id1キー）</td><td><span class="method get">GET</span></td><td><code>system_id1/:id</code></td><td><span class="badge read">READ</span></td><td></td></tr>
+  <tr><td>取得（emailキー）</td><td><span class="method get">GET</span></td><td><code>email/:email</code></td><td><span class="badge read">READ</span></td><td></td></tr>
+  <tr><td>削除（system_id1キー）</td><td><span class="method delete">DELETE</span></td><td><code>system_id1/:id</code></td><td><span class="badge write">WRITE</span></td><td>⚠ 破壊的操作</td></tr>
+  <tr><td>削除（emailキー）</td><td><span class="method delete">DELETE</span></td><td><code>email/:email</code></td><td><span class="badge write">WRITE</span></td><td>⚠ 破壊的操作</td></tr>
+</table>
+
+<h3>3-2. アドレス帳（customer_group）</h3>
+<table class="endpoint-row">
+  <tr><th>操作</th><th>メソッド</th><th>エンドポイント</th><th>分類</th></tr>
+  <tr><td>一覧取得</td><td><span class="method get">GET</span></td><td><code>/api/v2/customer_groups</code></td><td><span class="badge read">READ</span></td></tr>
+</table>
+
+<h3>3-3. チケット（ticket）</h3>
+<p>URI前半: <code>/api/v2/:message_box_id/tickets/</code></p>
+<table class="endpoint-row">
+  <tr><th>操作</th><th>メソッド</th><th>パス末尾</th><th>分類</th><th>備考</th></tr>
+  <tr><td>検索</td><td><span class="method get">GET</span></td><td><code>search</code></td><td><span class="badge read">READ</span></td><td>ステータス、ラベル、保留理由等で絞り込み</td></tr>
+  <tr><td>1件取得</td><td><span class="method get">GET</span></td><td><code>:ticket_id</code></td><td><span class="badge read">READ</span></td><td>コメント・添付ファイル情報含む</td></tr>
+  <tr><td>応対メモ作成</td><td><span class="method post">POST</span></td><td><code>:ticket_id/customer_notes</code></td><td><span class="badge write">WRITE</span></td><td>operator は任意</td></tr>
+  <tr><td>更新</td><td><span class="method put">PUT</span></td><td><code>:ticket_id</code></td><td><span class="badge write">WRITE</span></td><td>ステータス変更、担当者変更、スヌーズ等</td></tr>
+</table>
+
+<h3>3-4. チャット連携</h3>
+<p>URI: <code>/api/v2/:message_box_id/tickets/:ticket_id/messages/:message_id/&lt;provider&gt;</code></p>
+<table class="endpoint-row">
+  <tr><th>プロバイダ</th><th>メソッド</th><th>パス末尾</th><th>分類</th><th>備考</th></tr>
+  <tr><td>ChatPlus</td><td><span class="method get">GET</span></td><td><code>chatplus</code></td><td><span class="badge read">READ</span></td><td>最大100件/ページ。account, account_key, conversations</td></tr>
+  <tr><td>Yahoo!ショッピング</td><td><span class="method get">GET</span></td><td><code>yahoo</code></td><td><span class="badge read">READ</span></td><td>注文ID・商品情報含む</td></tr>
+  <tr><td>R-Messe（楽天）</td><td><span class="method get">GET</span></td><td><code>r_messe</code></td><td><span class="badge read">READ</span></td><td>注文番号・商品情報・ソーシャルギフト種別含む</td></tr>
+  <tr><td>LINE</td><td><span class="method get">GET</span></td><td><code>line</code></td><td><span class="badge read">READ</span></td><td>channel_id, group_name, auto_send対応</td></tr>
+</table>
+<p>全チャットAPIの会話種別: text, file, image, video, audio, location, sticker, chatplus_textform, chatplus_carousel, chatplus_chatbot, chatplus_imagemap</p>
+
+<h3>3-5. 受信箱（message_box）</h3>
+<table class="endpoint-row">
+  <tr><th>操作</th><th>メソッド</th><th>エンドポイント</th><th>分類</th></tr>
+  <tr><td>一覧取得</td><td><span class="method get">GET</span></td><td><code>/api/v2/message_boxes</code></td><td><span class="badge read">READ</span></td></tr>
+</table>
+
+<h3>3-6. 保留理由（pending_reason）</h3>
+<table class="endpoint-row">
+  <tr><th>操作</th><th>メソッド</th><th>エンドポイント</th><th>分類</th></tr>
+  <tr><td>一覧取得</td><td><span class="method get">GET</span></td><td><code>/api/v2/:message_box_id/pending_reasons</code></td><td><span class="badge read">READ</span></td></tr>
+</table>
+<p>スヌーズ復帰日時: no_term, today(17時), tomorrow(8時), weekend(8時), next_monday(8時), next_week(8時), next_month(1日8時), after_month(8時)</p>
+
+<h3>3-7. ユーザー（user）</h3>
+<table class="endpoint-row">
+  <tr><th>操作</th><th>メソッド</th><th>エンドポイント</th><th>分類</th></tr>
+  <tr><td>一覧取得</td><td><span class="method get">GET</span></td><td><code>/api/v2/:message_box_id/users</code></td><td><span class="badge read">READ</span></td></tr>
+</table>
+<p>レスポンス: メールアドレス、テナント管理者フラグ、多要素認証フラグ、最終アクセス日時を含む</p>
+
+<h3>3-8. チケット分類（case_category）</h3>
+<table class="endpoint-row">
+  <tr><th>操作</th><th>メソッド</th><th>エンドポイント</th><th>分類</th><th>備考</th></tr>
+  <tr><td>一覧取得</td><td><span class="method get">GET</span></td><td><code>/api/v2/:message_box_id/case_categories</code></td><td><span class="badge read">READ</span></td><td>階層構造（親>子>孫）、per_page最大100</td></tr>
+  <tr><td>登録</td><td><span class="method post">POST</span></td><td><code>/api/v2/:message_box_id/case_categories</code></td><td><span class="badge master">MASTER</span></td><td>name必須、parent_id任意</td></tr>
+  <tr><td>更新</td><td><span class="method put">PUT</span></td><td><code>/api/v2/:message_box_id/case_categories/:id</code></td><td><span class="badge master">MASTER</span></td><td>アーカイブ可。204 No Content</td></tr>
+</table>
+
+<h3>3-9. ラベル（label）</h3>
+<table class="endpoint-row">
+  <tr><th>操作</th><th>メソッド</th><th>エンドポイント</th><th>分類</th></tr>
+  <tr><td>一覧取得</td><td><span class="method get">GET</span></td><td><code>/api/v2/:message_box_id/labels</code></td><td><span class="badge read">READ</span></td></tr>
+  <tr><td>登録</td><td><span class="method post">POST</span></td><td><code>/api/v2/:message_box_id/labels</code></td><td><span class="badge master">MASTER</span></td></tr>
+  <tr><td>更新</td><td><span class="method put">PUT</span></td><td><code>/api/v2/:message_box_id/labels/:id</code></td><td><span class="badge master">MASTER</span></td></tr>
+</table>
+
+<h3>3-10. バッジ（badge）</h3>
+<table class="endpoint-row">
+  <tr><th>操作</th><th>メソッド</th><th>エンドポイント</th><th>分類</th></tr>
+  <tr><td>一覧取得</td><td><span class="method get">GET</span></td><td><code>/api/v2/customer_groups/:customer_group_id/badges</code></td><td><span class="badge read">READ</span></td></tr>
+</table>
+
+<h3>3-11. 送信メール設定（mail_account）</h3>
+<table class="endpoint-row">
+  <tr><th>操作</th><th>メソッド</th><th>エンドポイント</th><th>分類</th></tr>
+  <tr><td>一覧取得</td><td><span class="method get">GET</span></td><td><code>/api/v2/:message_box_id/mail_accounts</code></td><td><span class="badge read">READ</span></td></tr>
+</table>
+
+<h3>3-12. メール（mail）</h3>
+<table class="endpoint-row">
+  <tr><th>操作</th><th>メソッド</th><th>エンドポイント</th><th>分類</th><th>備考</th></tr>
+  <tr><td>送信</td><td><span class="method post">POST</span></td><td><code>/api/v2/:message_box_id/mails</code></td><td><span class="badge write">WRITE</span></td><td>⚠ 新規チケット作成+メール送信。HTML/TEXT対応。status_cd, mail_account_id必須</td></tr>
+  <tr><td>返信</td><td><span class="method post">POST</span></td><td><code>/api/v2/:message_box_id/mails/reply</code></td><td><span class="badge write">WRITE</span></td><td>⚠ message_id指定で既存チケットに返信</td></tr>
+  <tr><td>下書き作成</td><td><span class="method post">POST</span></td><td><code>/api/v2/:message_box_id/mails/draft</code></td><td><span class="badge write">WRITE</span></td><td>message_id省略で新規チケット。テストサーバー不可</td></tr>
+</table>
+
+<h3>3-13. テンプレート（template）</h3>
+<table class="endpoint-row">
+  <tr><th>操作</th><th>メソッド</th><th>エンドポイント</th><th>分類</th><th>備考</th></tr>
+  <tr><td>一覧取得</td><td><span class="method get">GET</span></td><td><code>/api/v2/:message_box_id/templates</code></td><td><span class="badge read">READ</span></td><td>per_page最大30。html_body/text_body含む</td></tr>
+  <tr><td>検索</td><td><span class="method post">POST</span></td><td><code>/api/v2/:message_box_id/templates/search</code></td><td><span class="badge read">READ</span></td><td>template_category_name完全一致</td></tr>
+</table>
+
+<h3>3-14. コメント（comment）</h3>
+<table class="endpoint-row">
+  <tr><th>操作</th><th>メソッド</th><th>エンドポイント</th><th>分類</th><th>備考</th></tr>
+  <tr><td>作成</td><td><span class="method post">POST</span></td><td><code>/api/v2/:message_box_id/comments</code></td><td><span class="badge write">WRITE</span></td><td>message_id + comment（最大1000文字）</td></tr>
+</table>
+
+<h3>3-15. 添付ファイル（attachment）</h3>
+<table class="endpoint-row">
+  <tr><th>操作</th><th>メソッド</th><th>エンドポイント</th><th>分類</th><th>備考</th></tr>
+  <tr><td>DL URL発行</td><td><span class="method get">GET</span></td><td><code>/api/v2/:message_box_id/messages/attachments/:attachment_id</code></td><td><span class="badge read">READ</span></td><td>Presigned URL。expires_in_sec付き</td></tr>
+</table>
+
+<!-- ====================================== -->
+<h2 id="safety">4. 安全性設計（ツール公開方針）</h2>
+
+<p>MCP の最大の利点：<strong>サーバー側でツールの公開/非公開を制御でき、どのAIクライアントが接続しても同じ安全性が保たれる</strong>。</p>
+
+<h3>推奨：3段階のツール公開レベル</h3>
+<table>
+  <tr><th>レベル</th><th>対象</th><th>方針</th></tr>
+  <tr><td><span class="badge read">READ</span> 常時公開</td><td>検索・一覧取得・チャット取得・添付DL</td><td>制限なし公開。AI が自律的に使える</td></tr>
+  <tr><td><span class="badge write">WRITE</span> 確認付き公開</td><td>コンタクト登録/更新、チケット更新、応対メモ作成、メール下書き、コメント</td><td>公開するが、ツール説明に「確認を促す」記述を入れる</td></tr>
+  <tr><td><span class="badge write">WRITE</span> 非公開 or 要フラグ</td><td>コンタクト削除、メール送信、メール返信</td><td>デフォルト非公開。設定で有効化する or 確認フラグ必須</td></tr>
+</table>
+
+<h3>マスタ管理系（MASTER）</h3>
+<p>チケット分類・ラベルの登録/更新はオプションツールとして実装。デフォルトは非公開。</p>
+
+<h3>レートリミット対策</h3>
+<p>60リクエスト/分。MCPサーバー内で <code>X-RateLimit-Remaining</code> を監視し、残り少ない場合は待機またはエラーを返す。</p>
+
+<!-- ====================================== -->
+<h2 id="existing-mcp">5. 既存MCPサーバーとの差分</h2>
+
+<table>
+  <tr><th>カテゴリ</th><th>既存MCP（Procrustes5）</th><th>今回の新規MCP</th></tr>
+  <tr><td>コンタクト</td><td>検索・登録・作成</td><td>+ 取得(2種) + 更新(2種) + 削除(2種)</td></tr>
+  <tr><td>アドレス帳</td><td>なし</td><td>一覧取得</td></tr>
+  <tr><td>チケット</td><td>検索・更新</td><td>+ 1件取得 + 応対メモ作成</td></tr>
+  <tr><td>チャット</td><td>なし</td><td>ChatPlus / Yahoo! / R-Messe / LINE 全対応</td></tr>
+  <tr><td>保留理由</td><td>なし</td><td>一覧取得</td></tr>
+  <tr><td>チケット分類</td><td>なし</td><td>一覧 + 登録 + 更新</td></tr>
+  <tr><td>ラベル</td><td>一覧のみ</td><td>+ 登録 + 更新</td></tr>
+  <tr><td>バッジ</td><td>なし</td><td>一覧取得</td></tr>
+  <tr><td>送信メール設定</td><td>なし</td><td>一覧取得</td></tr>
+  <tr><td>メール</td><td>送信のみ</td><td>+ 返信 + 下書き</td></tr>
+  <tr><td>テンプレート</td><td>検索のみ</td><td>+ 一覧取得</td></tr>
+  <tr><td>コメント</td><td>なし</td><td>作成</td></tr>
+  <tr><td>添付ファイル</td><td>なし</td><td>DL URL発行</td></tr>
+  <tr><td>ユーザー</td><td>一覧</td><td>一覧（同等）</td></tr>
+  <tr><td>受信箱</td><td>一覧</td><td>一覧（同等）</td></tr>
+</table>
+
+<!-- ====================================== -->
+<h2 id="derivatives">6. 派生プロダクト（C# ライブラリ / CLI）</h2>
+
+<p>MCP サーバーのAPI クライアント層の設計を、他言語へ移植しやすい構造にしておく。</p>
+
+<h3>展開計画</h3>
+<table>
+  <tr><th>プロダクト</th><th>言語</th><th>用途</th><th>優先度</th></tr>
+  <tr><td>MCP Server</td><td>TypeScript</td><td>AI ツール統合（Claude / Codex / Gemini）</td><td>最優先</td></tr>
+  <tr><td>C# ライブラリ</td><td>C# / .NET</td><td>自社システム連携、バッチ処理</td><td>次フェーズ</td></tr>
+  <tr><td>CLI ツール</td><td>C#（ライブラリ上に構築）</td><td>運用者が直接叩く、スクリプト組み込み</td><td>次フェーズ</td></tr>
+</table>
+
+<h3>設計のポイント</h3>
+<ul>
+  <li>MCP の TypeScript 実装で、API クライアント部分（HTTP呼び出し + 型定義）と MCP ツール定義部分を分離する</li>
+  <li>API クライアント部分の仕様書 = このドキュメントのエンドポイント一覧がそのまま使える</li>
+  <li>C# 版は MCP の型定義（JSON Schema）を参考に、同等のリクエスト/レスポンス型を定義</li>
+</ul>
+
+<!-- ====================================== -->
+<h2 id="sources">7. ソース資料の所在</h2>
+
+<table>
+  <tr><th>資料</th><th>パス / URL</th></tr>
+  <tr><td>公式APIドキュメント（raw）</td><td><code>llm-wiki/raw/Clippings/2026-05-15_認証 – Relation API 開発ガイド.md</code></td></tr>
+  <tr><td>既存MCPサーバー情報（raw）</td><td><code>llm-wiki/raw/Clippings/2026-05-15_Procrustes5relation-mcp-server.md</code></td></tr>
+  <tr><td>Wiki: Re:lation エンティティ</td><td><code>llm-wiki/wiki/relation.md</code></td></tr>
+  <tr><td>Wiki: API開発ガイド要約</td><td><code>llm-wiki/wiki/src-relation-api-guide.md</code></td></tr>
+  <tr><td>Wiki: MCPサーバー要約</td><td><code>llm-wiki/wiki/src-relation-mcp-server.md</code></td></tr>
+  <tr><td>公式APIドキュメント（Web）</td><td><code>https://developer.ingage.jp/</code></td></tr>
+  <tr><td>既存MCPサーバー（GitHub）</td><td><code>https://github.com/Procrustes5/relation-mcp-server</code></td></tr>
+</table>
+
+<hr style="margin: 2rem 0; border-color: #333;">
+<p style="color: var(--muted); font-size: 0.85rem;">
+  このドキュメントは <code>C:\repos\RelationAppMCP</code> での設計・実装開始時の引き継ぎ資料です。<br>
+  API 仕様の最終確認は必ず <a href="https://developer.ingage.jp/" style="color: var(--green);">公式ドキュメント</a> で行ってください。
+</p>
+
+</div>
+</body>
+</html>

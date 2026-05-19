@@ -1,0 +1,21 @@
+node_modules/
+dist/
+
+# Environment & secrets
+.env
+.env.*
+
+# Claude memory (local state, not for sharing)
+.claude/memory/memory.db
+.claude/memory/memory.db-*
+.claude/memory/daily/
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+*.swp

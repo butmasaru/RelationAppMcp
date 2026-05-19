@@ -1,0 +1,22 @@
+{
+  "name": "relation-mcp-server",
+  "version": "1.0.0",
+  "description": "MCP Server for Re:lation API v2 - Full endpoint coverage",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "relation-mcp-server": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.0",
+    "@types/node": "^22.0.0"
+  }
+}

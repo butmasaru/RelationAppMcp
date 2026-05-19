@@ -1,0 +1,64 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -ExecutionPolicy Bypass -Command \"$input = $env:TOOL_INPUT | ConvertFrom-Json; if ($input.file_path -match '\\.env') { Write-Output '{\\\"decision\\\":\\\"block\\\",\\\"reason\\\":\\\".env files are protected - contains API tokens\\\"}' } else { Write-Output '{\\\"decision\\\":\\\"allow\\\"}' }\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -ExecutionPolicy Bypass -File .claude/memory/hooks/session-start-context.ps1",
+            "timeout": 10000
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -ExecutionPolicy Bypass -File .claude/memory/hooks/pre-compact-flush.ps1",
+            "timeout": 10000
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -ExecutionPolicy Bypass -File .claude/memory/hooks/post-tool-memory-index.ps1",
+            "timeout": 15000
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -ExecutionPolicy Bypass -File .claude/memory/hooks/session-end-summary.ps1",
+            "timeout": 10000
+          }
+        ]
+      }
+    ]
+  }
+}
